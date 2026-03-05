@@ -2,6 +2,23 @@
 import pandas as pd
 # from matplotlib.sphinxext.mathmpl import latex_math
 # from packaging.tags import interpreter_name
+import matplotlib
+matplotlib.use("TkAgg")  # külső ablakos, interaktív backend
+import matplotlib.pyplot as plt
+plt.ion()
+
+def tic():
+    #Homemade version of matlab tic and toc functions
+    import time
+    global startTime_for_tictoc
+    startTime_for_tictoc = time.time()
+
+def toc():
+    import time
+    if 'startTime_for_tictoc' in globals():
+        print("Elapsed time is " + str(time.time() - startTime_for_tictoc) + " seconds.")
+    else:
+        print("Toc: start time not set")
 
 # Data of container counts per town
 df1 = pd.read_excel('Ruhagyujto-kontenerek-ABC-2024.10.14_ke.xlsx', sheet_name='Table 1',
@@ -15,13 +32,13 @@ df2 = pd.read_excel('HKK_nodes (2).xlsx', sheet_name='nodes',
                    usecols=['Town','Inhabitants', 'y_lat','x_lon']) #GPS a településeké...
 df2.dropna(axis=0, how='all', inplace=True)
 
-df1["y_lat"]=0
-df1["x_lon"]=0
+df1["y_lat"]=0.0
+df1["x_lon"]=0.0
 df1["Inhabitants"]=0
 for i in df1['Town']:
-    df1["y_lat"][df1['Town']==i]=df2[df2['Town']==i]["y_lat"].iloc[0]
-    df1["x_lon"][df1['Town'] == i] = df2[df2['Town'] == i]["x_lon"].iloc[0]
-    df1["Inhabitants"][df1['Town'] == i] = df2[df2['Town'] == i]["Inhabitants"].iloc[0]
+    df1.loc[df1['Town']==i,"y_lat"]=df2.loc[df2['Town']==i,"y_lat"].iloc[0]
+    df1.loc[df1['Town'] == i,"x_lon"] = df2.loc[df2['Town'] == i,"x_lon"].iloc[0]
+    df1.loc[df1['Town'] == i,"Inhabitants"] = df2.loc[df2['Town'] == i,"Inhabitants"].iloc[0]
 
 # df1.columns
 
@@ -85,24 +102,24 @@ filename="filename3.pickle"
 road_nw=pickle.load(open(filename, 'rb'))
 
 ##% FIGURE
-fig, ax = ox.plot_graph(road_nw,node_size=0, edge_linewidth=0.05, edge_color='gainsboro',bgcolor='white',show=True, close=False) #plot here
-# ax.scatter(df2['x_lon'],df2['y_lat'],c='red',s=3, label='Municipalities')
-ax.scatter(df1['x_lon'],df1['y_lat'],c='red',s=7, label='Containers')
+fig, ax = ox.plot_graph(road_nw,node_size=0, edge_linewidth=0.5, edge_color='gainsboro',bgcolor='white',show=True, close=False) #plot here, edge_linewidth=0.05
+ax.scatter(df2['x_lon'],df2['y_lat'],c='black',s=1, label='Without containers')
+ax.scatter(df1['x_lon'],df1['y_lat'],c='red',s=7, label='With containers')
 plt.legend()
 ax.legend(loc='upper left')
 plt.show()
-# plt.savefig('fig3.eps', format='eps')
+# plt.savefig('fig3_v1.eps', format='eps')
 
 ##% FIGURE: Distribution of containers and inhabitans
 import plotly.express as px
 
 # fig = px.density_map(df1, lat = 'y_lat', lon = 'x_lon',z = (df1['pcs_loc']-df1['pcs_loc'].min())/(df1['pcs_loc'].max()-df1['pcs_loc'].min()),radius=50, zoom=6.5) #normalized
-fig = px.density_map(df1, lat = 'y_lat', lon = 'x_lon',z = 'pcs_loc',radius=50, zoom=6.5,range_color=[0,df1['pcs_loc'].max()],labels={'pcs_loc': 'Containers'}) #count
+fig = px.density_map(df1, lat = 'y_lat', lon = 'x_lon',z = 'pcs_loc',radius=50, zoom=6.5,range_color=[0,df1['pcs_loc'].max()],color_continuous_scale=px.colors.sequential.Reds[3:],labels={'pcs_loc': 'Containers'}) #count, #piros jobb, [3,:]
 fig.show()
 fig.write_html("fig_containers.html", auto_open=True)
 
 # fig = px.density_map(df2, lat = 'y_lat', lon = 'x_lon', z = (df2['Inhabitants']-df2['Inhabitants'].min())/(df2['Inhabitants'].max()-df2['Inhabitants'].min()),radius=50,zoom=6.5) #normalized
-fig = px.density_map(df2, lat = 'y_lat', lon = 'x_lon', z = 'Inhabitants', radius=50, zoom=6.5) #count
+fig = px.density_map(df2, lat = 'y_lat', lon = 'x_lon', z = 'Inhabitants', radius=50, color_continuous_scale=px.colors.sequential.Reds[3:],zoom=6.5) #count #piros jobb, [2,:]
 fig.show()
 fig.write_html("fig_inhabitants.html", auto_open=True)
 
@@ -237,6 +254,9 @@ distances=pickle.load(open(filename, 'rb'))
 import pandas as pd
 import pickle
 import numpy as np
+
+
+
 # distances_all.pickle: all distances between towns [in m], filled both triangular matrices
 distances=pickle.load(open("distances_all.pickle", 'rb'))
 # df_waste.csv: textilte waste per inhabitant
@@ -265,16 +285,21 @@ data=pd.concat([df_cities[['Town','Inhabitants']], distances], axis=1)
 # applying the algorithm
 # from subtractive_clustering_gps import subtractive_clustering_algorithm
 # from subtractive_clustering_gps_capacity import subtractive_clustering_algorithm
-from subtractive_clustering_gps_capacity_init import subtractive_clustering_algorithm
+# from subtractive_clustering_gps_capacity_init import subtractive_clustering_algorithm
+
+import importlib
+import subtractive_clustering_gps_capacity_init
+importlib.reload(subtractive_clustering_gps_capacity_init)
+from subtractive_clustering_gps_capacity_init  import subtractive_clustering_algorithm  # újraimport!
 
 center_init = pd.DataFrame([],columns=['pcs_loc']) #if it is empty, # "RAW"
-# center_init = df1[['Town','pcs_loc']] # "PLUS"
-# ra=222.71 #mean: 12400 m/person/day
-import math
-ra=math.sqrt(1000000)*2 #KEINNEN  --> IF change, CHANGE init_pot as well... --> tendency is the same, but normalized for 0-1
+# center_init = df1[['Town','pcs_loc']] # "PLUS" #SVAE: init_pot
+ra=222.71 #mean: 12400 m/person/day
+# import math
+# ra=math.sqrt(1000000)*2 #KEINNEN  --> IF change, CHANGE init_pot as well... --> tendency is the same, but normalized for 0-1 #KEVISSZA
 
 #For potential sensitivity
-pot_init = pickle.load(open("potential_initial.pickle", 'rb')) #SAVE:init_potential (in RAW case!)
+# pot_init = pickle.load(open("potential_initial.pickle", 'rb')) #SAVE:init_potential (in RAW case!)
 Nc_and_pot_all=[]
 
 # # Original
@@ -283,23 +308,28 @@ Nc_and_pot_all=[]
 
 #KEINNEN
 # Optimal number of containers (uncovered potential sensitivity)
-for i in range(2500,8000,200): #2453 is included
+tic()
+for i in [2453]: #range(2500,8000,200): #2453 is included
     print(i)
     centers, newdata, init_potential = subtractive_clustering_algorithm(ra, ra, data, center_init, "center number",
                                                                         N_center=i)  # Eup=0.5, Edown=0.15, TNcenter: there are 2453 cont. at the moment
-    pot_raw_Nc=newdata[:,[0,3]]
-    Nc_and_pot_all.append([i,pot_raw_Nc[:, -1][pot_raw_Nc[:, -1] >= 0].sum() / pot_init[:, -1][pot_init[:, -1] >= 0].sum()])
-
+    # pot_raw_Nc=newdata[:,[0,3]]
+    # Nc_and_pot_all.append([i,pot_raw_Nc[:, -1][pot_raw_Nc[:, -1] >= 0].sum() / pot_init[:, -1][pot_init[:, -1] >= 0].sum()])
+toc()
 
 # SAVE
-# with open("centers_cap_inhab_6500_plus.pickle", 'wb') as f:
+# with open("centers_flexcap_inhab_2453_raw_vproba.pickle", 'wb') as f:
 #     pickle.dump(centers, f)
-# with open("potential_inhab_6000_raw.pickle", 'wb') as f:
+# with open("potential_predcont_cap1500_inhab_6000_plus_v1.pickle", 'wb') as f:
 #     pickle.dump(newdata[:,[0,3]], f)
 
+# with open("potential_predcont_cap1500_6000_raw.pickle", 'wb') as f:
+#     pickle.dump(newdata[:,[0,3]], f)
+# with open("potential_realcont_v1.pickle", 'wb') as f: # "PLUS"
+#     pickle.dump(init_potential[:,[0,3]], f)
 # with open("potential_predcont_inhab_6000_plus.pickle", 'wb') as f:
 #     pickle.dump(newdata[:,[0,3]], f)
-# with open("potential_realcont.pickle", 'wb') as f:
+# with open("potential_flexcap_2453cont_initial.pickle", 'wb') as f:
 #     pickle.dump(init_potential[:,[0,3]], f)
 #
 # with open("sens_cont_number_2500_8000_100_alfa30000.pickle", 'wb') as f:
@@ -333,8 +363,9 @@ fig.write_html("fig_containers_final.html", auto_open=True)
 import pickle
 import numpy as np
 import pandas as pd
+from matplotlib.colors import ListedColormap
 
-centers = pickle.load(open("centers_cap_inhab_2453_raw.pickle", 'rb'))[:,0] #fig5: _flexcap_; fig6: _cap_
+centers = pickle.load(open("centers_cap_inhab_2453_raw.pickle", 'rb'))[:,0] #fig5: "centers_flexcap_inhab_2453_raw.pickle"; fig6: "centers_cap_inhab_2453_raw.pickle"
 centers_new = np.unique(centers, return_counts=True)
 df_new = pd.DataFrame({'Town':centers_new[0],'pcs_loc':centers_new[1]})
 # df_allcont_withpcs = pd.concat([df1[['Town','pcs_loc']],df_new]).groupby(['Town'],as_index=False).sum() #with PLUS
@@ -368,23 +399,38 @@ road_nw=pickle.load(open('filename3.pickle', 'rb'))
 # fig, ax = ox.plot_graph(road_nw,node_size=0, edge_linewidth=0.05,edge_color='gainsboro', bgcolor='white',show=True, close=False) #plot here
 #png
 fig, ax = ox.plot_graph(road_nw,node_size=0, edge_linewidth=0.05,edge_color='black', bgcolor='white',show=True, close=False) #plot here
+#OR: size scale
 ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']>0],df2_new['y_lat'][df2_new['pcs_loc_diff']>0],c='red',s=2*3*df2_new['pcs_loc_diff'][df2_new['pcs_loc_diff']>0],label='Surplus') #real-predicted
 ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']<0],df2_new['y_lat'][df2_new['pcs_loc_diff']<0],c='blue',s=2*3*abs(df2_new['pcs_loc_diff'][df2_new['pcs_loc_diff']<0]),label='Deficit') #predicted
-# ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']==0],df2_new['y_lat'][df2_new['pcs_loc_diff']==0],facecolors='None', edgecolors='k',s=0.5,label='Optimal') #predicted
+# # ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']==0],df2_new['y_lat'][df2_new['pcs_loc_diff']==0],facecolors='None', edgecolors='k',s=0.5,label='Optimal') #predicted
+#OR: colorscale
+# ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']>0],df2_new['y_lat'][df2_new['pcs_loc_diff']>0],c=df2_new['pcs_loc_diff'][df2_new['pcs_loc_diff']>0],cmap=ListedColormap(plt.cm.Reds(np.linspace(0.2, 0.9, 256))),s=2*3*2,label='Surplus') #real-predicted
+# ax.scatter(df2_new['x_lon'][df2_new['pcs_loc_diff']<0],df2_new['y_lat'][df2_new['pcs_loc_diff']<0],c=abs(df2_new['pcs_loc_diff'][df2_new['pcs_loc_diff']<0]),cmap=ListedColormap(plt.cm.Blues(np.linspace(0.2, 0.9, 256))),s=2*3*2,label='Deficit') #predicted
 
+
+xxx = 10
+xxxx = 30
 custom_legend = [
-    matplotlib.lines.Line2D([0], [0], marker='o', color='w', label='Surplus',
-           markerfacecolor='red', markersize=12),  # Smaller marker
-    matplotlib.lines.Line2D([0], [0], marker='o', color='w', label='Deficit',
-           markerfacecolor='blue', markersize=12)  # Larger marker
+    matplotlib.lines.Line2D([], [], marker='o', color='r', label=f'Surplus (+{xxxx}) ',
+                            markerfacecolor='red', markersize=np.sqrt(6 * xxxx), linestyle='None'),  # Larger marker
+    matplotlib.lines.Line2D([], [], marker='o', color='r', label=f'Surplus (+{xxx}) ',
+           markerfacecolor='red', markersize=np.sqrt(6*xxx),linestyle='None'),  # Larger marker
+    matplotlib.lines.Line2D([], [], marker='o', color='r', label='Surplus (+1)',
+                            markerfacecolor='red', markersize=np.sqrt(6),linestyle='None'),  # Smaller marker
+    matplotlib.lines.Line2D([], [], marker='o', color='b', label=f'Deficit (-{xxxx})',
+                            markerfacecolor='blue', markersize=np.sqrt(6 * xxxx), linestyle='None'),  # Larger marker
+    matplotlib.lines.Line2D([], [], marker='o', color='b', label=f'Deficit (-{xxx})',
+           markerfacecolor='blue', markersize=np.sqrt(6*xxx),linestyle='None'),  # Larger marker
+    matplotlib.lines.Line2D([], [], marker='o', color='b', label='Deficit (-1)',
+                            markerfacecolor='blue', markersize=np.sqrt(6),linestyle='None')  # Smaller marker
 ]
-plt.legend(handles=custom_legend,loc='upper left')
+plt.legend(handles=custom_legend,loc='upper left').set_draggable(True)
 fig.set_size_inches(11.5, 8.7)
 plt.show()
 
 ## FIGURE: Sensitivity analysis on container number (remaining potential vs. settled containers) (CIKK: fig7)
 import pickle
-# Nc_and_pot_all = pickle.load(open('sens_cont_number_2500_8000_100.pickle', 'rb'))
+Nc_and_pot_all = pickle.load(open('sens_cont_number_2500_8000_100.pickle', 'rb'))
 
 import matplotlib.pyplot as plt
 plt.figure()
@@ -416,8 +462,8 @@ list_init=[]
 for i in range(len(df1)):
     list_init = list_init + int(df1['pcs_loc'][i])*[df1['Town'][i]]
 
-list_a = pickle.load(open("centers_cap_waste_2453_raw.pickle", 'rb'))[:,0]
-list_b = pickle.load(open("centers_flexcap_inhab_2453_raw.pickle", 'rb'))[:,0]
+list_a = pickle.load(open("centers_cap_waste_2453_raw.pickle", 'rb'))[:,0] #INFO
+list_b = pickle.load(open("centers_flexcap_inhab_2453_raw_vproba.pickle", 'rb'))[:,0] #INFO "centers_flexcap_inhab_2453_raw.pickle"
 
 df_b=pd.DataFrame(list_b,columns=['Town'])
 df_bb=pd.DataFrame({'Town':np.unique(list_b),'pcs_loc':np.unique(list_b, return_counts=True)[1]}) #for faster Wasserstein
@@ -453,32 +499,34 @@ def toc():
 # WD_waste_inhab = wasserstein_distance_nd(np.array(df_aa[['y_lat','x_lon']]),np.array(df_bb[['y_lat','x_lon']]),df_aa['pcs_loc']/df_aa['pcs_loc'].sum(),df_bb['pcs_loc']/df_bb['pcs_loc'].sum())
 # toc()
 # #Population vs. (real) container distribution (6 min.)
-tic()
-WD_pop_contreal = wasserstein_distance_nd(np.array(df2[['y_lat','x_lon']]),np.array(df1[['y_lat','x_lon']]),df2['Inhabitants']/df2['Inhabitants'].sum(),df1['pcs_loc']/df1['pcs_loc'].sum())
-toc()
-# #Population vs. (predicted) container distribution (20 min.)
 # tic()
-# WD_pop_contpredict = wasserstein_distance_nd(np.array(df2[['y_lat','x_lon']]),np.array(df_bb[['y_lat','x_lon']]),df2['Inhabitants']/df2['Inhabitants'].sum(),df_bb['pcs_loc']/df_bb['pcs_loc'].sum())
+# WD_pop_contreal = wasserstein_distance_nd(np.array(df2[['y_lat','x_lon']]),np.array(df1[['y_lat','x_lon']]),df2['Inhabitants']/df2['Inhabitants'].sum(),df1['pcs_loc']/df1['pcs_loc'].sum())
 # toc()
+# #Population vs. (predicted) container distribution (20 min.)
+tic()
+WD_pop_contpredict = wasserstein_distance_nd(np.array(df2[['y_lat','x_lon']]),np.array(df_bb[['y_lat','x_lon']]),df2['Inhabitants']/df2['Inhabitants'].sum(),df_bb['pcs_loc']/df_bb['pcs_loc'].sum())
+toc()
 print(f"Wasserstein Distance (real vs. optimal): {WD_real_pred}")
 ##% TEST: Initial potentials (100%) vs. final potentials (remaining potentials)
 import pickle
 
 pot_init = pickle.load(open("potential_initial.pickle", 'rb')) #SAVE:init_potential
-pot_raw_2453 = pickle.load(open("potential_predcont_inhab_2453_raw.pickle", 'rb')) #SAVE:newdata
-pot_raw_6000 = pickle.load(open("potential_predcont_inhab_6000_raw.pickle", 'rb')) #SAVE:newdata
-pot_real_2453 = pickle.load(open("potential_realcont.pickle", 'rb')) #SAVE:init_potential
-pot_plus_6000 = pickle.load(open("potential_predcont_inhab_6000_plus.pickle", 'rb'))  #SAVE:newdata #these are the final potentials (the real containers are considered at the beginning)
+# pot_raw_2453 = pickle.load(open("potential_predcont_inhab_2453_raw.pickle", 'rb')) #SAVE:newdata
+pot_raw_2453 = pickle.load(open("potential_predcont_cap1500_inhab_2453_raw.pickle", 'rb')) #SAVE:newdata
+pot_raw_6000 = pickle.load(open("potential_predcont_cap1500_inhab_6000_raw.pickle", 'rb')) #SAVE:newdata, potential_predcont_inhab_6000_raw.pickle
+pot_real_2453 = pickle.load(open("potential_realcont_cap1500.pickle", 'rb')) #SAVE:init_potential
+pot_plus_6000 = pickle.load(open("potential_predcont_cap1500_inhab_6000_plus.pickle", 'rb'))  #SAVE:newdata #these are the final potentials (the real containers are considered at the beginning), potential_predcont_cap1500_inhab_6000_plus_v1.pickle
 
 
 pot_init[:,-1][pot_init[:,-1]>=0].sum()
-pot_raw_2453[:,-1][pot_raw_2453[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
-pot_raw_6000[:,-1][pot_raw_6000[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
+CC=pot_raw_2453[:,-1][pot_raw_2453[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
+DD=pot_raw_6000[:,-1][pot_raw_6000[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
 AA=pot_real_2453[:,-1][pot_real_2453[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
 BB=pot_plus_6000[:,-1][pot_plus_6000[:,-1]>=0].sum()/pot_init[:,-1][pot_init[:,-1]>=0].sum()
 
 
-
+# eee = pickle.load(open('centers_cap1500_inhab_6000_plus_v1.pickle','rb'))
+# fff = pickle.load(open('centers_cap_inhab_6000_plus.pickle','rb'))
 
 
 
@@ -535,8 +583,8 @@ plt.show()
 import osmnx as ox
 import numpy as np
 
-#centers_cap_inhab_2453_raw.pickle: first 2453 by inhabitants; centers_cap_waste_2453_raw.pickle: first 2453 by textile
-centers=pickle.load(open("centers_flexcap_inhab_2453_raw.pickle", 'rb'))
+#centers_(flex)cap_inhab_2453_raw.pickle: first 2453 by inhabitants; centers_cap_waste_2453_raw.pickle: first 2453 by textile
+centers=pickle.load(open("centers_cap_inhab_2453_raw_wrong.pickle", 'rb'))
 
 #N_center=503 if only the places are considered without capacity; N_centers=2453 with capacity
 agrees=(df1['Town'].isin(centers[:,0]))
